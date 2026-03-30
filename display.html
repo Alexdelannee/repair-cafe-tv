@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repair Café - Tv-scherm</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <div class="brand">
+          <img class="logo" src="./assets/img/repaircafexneworig.png" alt="Repair Café Zuilen logo" />
+          <div>
+            <h1 class="title fontLead">Repair Café</h1>
+            <p class="subtitle" id="subtitleText">Tv-scherm</p>
+          </div>
+        </div>
+        <div class="chip" id="dayChip">Vandaag</div>
+      </div>
+
+      <div class="grid3">
+        <div class="panel">
+          <div class="kpiLabel" id="visitorsLabel">Bezoekers vandaag</div>
+          <div class="fontLead kpiValue" id="visitorCount">…</div>
+        </div>
+        <div class="panel">
+          <div class="kpiLabel" id="queuedLabel">Wachtrij</div>
+          <div class="fontLead kpiValue" id="queuedCount">…</div>
+        </div>
+        <div class="panel">
+          <div class="kpiLabel" id="doneLabel">Klaar</div>
+          <div class="fontLead kpiValue" id="doneCount">…</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="kpiLabel" id="inProgressLabel">Bezig</div>
+          <div class="fontLead kpiValue" id="inProgressCount">…</div>
+          <div class="muted" id="autoRefreshText" style="margin-top: 10px">
+            Wordt automatisch elke paar seconden bijgewerkt.
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="kpiLabel" id="latestRepairsLabel">Laatste reparaties (vandaag)</div>
+          <div class="list" id="repairsList"></div>
+        </div>
+      </div>
+
+      <div class="errorBox" id="errorBox" style="display: none"></div>
+    </div>
+
+    <div class="tvFullscreenHint" id="tvHint">Tip: cast een browsertab met deze URL. Gebruik eventueel volledig scherm.</div>
+
+    <script type="module">
+      import {
+        fetchVisitorCountToday,
+        fetchRepairsSummaryToday,
+        fetchLatestRepairsToday,
+        getEffectiveRepairDay,
+        getUiLanguage,
+        statusLabel,
+      } from "./lib.js";
+
+      const errorBox = document.getElementById("errorBox");
+      const visitorCountEl = document.getElementById("visitorCount");
+      const queuedCountEl = document.getElementById("queuedCount");
+      const inProgressCountEl = document.getElementById("inProgressCount");
+      const doneCountEl = document.getElementById("doneCount");
+      const repairsListEl = document.getElementById("repairsList");
+      const dayChip = document.getElementById("dayChip");
+      const subtitleText = document.getElementById("subtitleText");
+      const lang = getUiLanguage();
+      const isEnglish = lang === "en";
+
+      document.documentElement.lang = lang;
+      document.title = isEnglish ? "Repair Cafe - TV Screen" : "Repair Café - Tv-scherm";
+      subtitleText.textContent = isEnglish ? "TV Screen" : "Tv-scherm";
+      dayChip.textContent = isEnglish ? "Today" : "Vandaag";
+      document.getElementById("visitorsLabel").textContent = isEnglish ? "Visitors today" : "Bezoekers vandaag";
+      document.getElementById("queuedLabel").textContent = isEnglish ? "Queued" : "Wachtrij";
+      document.getElementById("doneLabel").textContent = isEnglish ? "Done" : "Klaar";
+      document.getElementById("inProgressLabel").textContent = isEnglish ? "In progress" : "Bezig";
+      document.getElementById("autoRefreshText").textContent = isEnglish
+        ? "Updates automatically every few seconds."
+        : "Wordt automatisch elke paar seconden bijgewerkt.";
+      document.getElementById("latestRepairsLabel").textContent = isEnglish
+        ? "Latest repairs (today)"
+        : "Laatste reparaties (vandaag)";
+      document.getElementById("tvHint").textContent = isEnglish
+        ? "Tip: cast a browser tab with this URL. Consider full screen mode."
+        : "Tip: cast een browsertab met deze URL. Gebruik eventueel volledig scherm.";
+
+      function showError(message) {
+        errorBox.style.display = "block";
+        errorBox.textContent = message;
+      }
+
+      function statusBadgeClass(status) {
+        if (status === "queued") return "badge badgeQueued";
+        if (status === "in_progress") return "badge badgeProgress";
+        if (status === "done") return "badge badgeDone";
+        return "badge";
+      }
+
+      function statusToneClass(status) {
+        if (status === "queued") return "tone toneQueued";
+        if (status === "in_progress") return "tone toneProgress";
+        if (status === "done") return "tone toneDone";
+        return "tone";
+      }
+
+      async function load() {
+        const repairDay = getEffectiveRepairDay();
+        dayChip.textContent = isEnglish ? `Today (${repairDay})` : `Vandaag (${repairDay})`;
+        subtitleText.textContent = isEnglish ? "TV Screen" : "Tv-scherm";
+
+        // Counts + list
+        const [visitorCount, summary, latest] = await Promise.all([
+          fetchVisitorCountToday(repairDay),
+          fetchRepairsSummaryToday(repairDay),
+          fetchLatestRepairsToday(repairDay, 10),
+        ]);
+
+        visitorCountEl.textContent = String(visitorCount);
+        queuedCountEl.textContent = String(summary.queuedCount);
+        inProgressCountEl.textContent = String(summary.inProgressCount);
+        doneCountEl.textContent = String(summary.doneCount);
+
+        repairsListEl.innerHTML = "";
+        for (const r of latest) {
+          const item = document.createElement("div");
+          item.className = "item";
+
+          const left = document.createElement("div");
+          const title = document.createElement("div");
+          title.className = "itemTitle";
+          title.textContent = `${r.category || (isEnglish ? "General" : "Algemeen")}`;
+
+          const desc = document.createElement("div");
+          desc.className = "itemDesc";
+          desc.textContent = r.description || "";
+
+          left.appendChild(title);
+          left.appendChild(desc);
+
+          const right = document.createElement("div");
+          const badge = document.createElement("div");
+          badge.className = statusBadgeClass(r.status);
+          badge.innerHTML = `<span class="${statusToneClass(r.status)}"></span>${statusLabel(r.status, lang)}`;
+          right.appendChild(badge);
+
+          item.appendChild(left);
+          item.appendChild(right);
+          repairsListEl.appendChild(item);
+        }
+      }
+
+      async function main() {
+        try {
+          await load();
+          setInterval(load, 4500);
+        } catch (e) {
+          showError(
+            isEnglish
+              ? "Could not load display data. Check `config.js`, verify Supabase tables exist, and ensure RLS allows anonymous reads."
+              : "Kon de schermgegevens niet laden. Controleer `config.js`, bevestig dat de Supabase-tabellen bestaan en dat RLS anonieme leesrechten toestaat."
+          );
+          // eslint-disable-next-line no-console
+          console.error(e);
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
+

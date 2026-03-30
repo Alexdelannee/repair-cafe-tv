@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+
+# local secrets / overrides (do not commit)
+config.local.js
+*.local
+

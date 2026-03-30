@@ -1,0 +1,293 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repair Café - Beheer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <div class="brand">
+          <img class="logo" src="./assets/img/repaircafexneworig.png" alt="Repair Café Zuilen logo" />
+          <div>
+            <h1 class="title fontLead">Repair Café - Beheer</h1>
+            <p class="subtitle" id="subtitleText">Werk de reparatielijst bij</p>
+          </div>
+        </div>
+        <div class="topbarActions">
+          <div class="langSwitch" aria-label="Language switcher">
+            <a id="langNlLink" href="./admin.html" class="langBtn">NL</a>
+            <a id="langEnLink" href="./admin.html?lang=en" class="langBtn">EN</a>
+          </div>
+          <div class="chip" id="dayChip">Vandaag</div>
+        </div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="kpiLabel" id="addRepairLabel">Reparatie toevoegen</div>
+
+          <form id="addForm">
+            <div style="margin-bottom: 10px">
+              <label for="categoryInput" id="categoryLabel">Categorie</label>
+              <input id="categoryInput" type="text" placeholder="bijv. Fietsremmen, Lampen, Kleding..." required />
+            </div>
+            <div style="margin-bottom: 10px">
+              <label for="descriptionInput" id="descriptionLabel">Wat moet er gerepareerd worden?</label>
+              <input
+                id="descriptionInput"
+                type="text"
+                placeholder="bijv. Lekke band / Bedrading vervangen / Knoop aanzetten..."
+                required
+              />
+            </div>
+            <div class="btnRow">
+              <button class="primary" type="submit" id="addRepairBtn">Toevoegen (wachtrij)</button>
+              <button type="button" id="clearDayBtn">Vandaag resetten</button>
+            </div>
+          </form>
+
+          <div id="errorBox" class="errorBox" style="display: none; margin-top: 12px"></div>
+          <div class="muted" id="storageNote" style="margin-top: 10px; font-size: 14px">
+            Gegevens worden eerst lokaal opgeslagen (localStorage). Als Supabase is ingesteld, worden updates op de achtergrond gespiegeld.
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="kpiLabel" id="summaryLabel">Overzicht vandaag</div>
+          <div class="grid3" style="grid-template-columns: 1fr 1fr 1fr; gap: 12px">
+            <div>
+              <div class="kpiLabel" id="queuedLabel" style="margin-bottom: 2px">Wachtrij</div>
+              <div class="fontLead kpiValue" style="font-size: clamp(38px, 4vw, 70px)" id="queuedCount">…</div>
+            </div>
+            <div>
+              <div class="kpiLabel" id="inProgressLabel" style="margin-bottom: 2px">Bezig</div>
+              <div class="fontLead kpiValue" style="font-size: clamp(38px, 4vw, 70px)" id="inProgressCount">…</div>
+            </div>
+            <div>
+              <div class="kpiLabel" id="doneLabel" style="margin-bottom: 2px">Klaar</div>
+              <div class="fontLead kpiValue" style="font-size: clamp(38px, 4vw, 70px)" id="doneCount">…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="kpiLabel" id="repairsTodayLabel">Reparaties (vandaag)</div>
+        <div class="list" id="repairsList"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        addRepairItemToday,
+        fetchLatestRepairsToday,
+        fetchRepairsSummaryToday,
+        getEffectiveRepairDay,
+        getUiLanguage,
+        setRepairStatus,
+        statusLabel,
+        statusTone,
+      } from "./lib.js";
+
+      const errorBox = document.getElementById("errorBox");
+      const dayChip = document.getElementById("dayChip");
+
+      const queuedCountEl = document.getElementById("queuedCount");
+      const inProgressCountEl = document.getElementById("inProgressCount");
+      const doneCountEl = document.getElementById("doneCount");
+      const repairsListEl = document.getElementById("repairsList");
+
+      const addForm = document.getElementById("addForm");
+      const categoryInput = document.getElementById("categoryInput");
+      const descriptionInput = document.getElementById("descriptionInput");
+      const clearDayBtn = document.getElementById("clearDayBtn");
+      const langNlLink = document.getElementById("langNlLink");
+      const langEnLink = document.getElementById("langEnLink");
+      const lang = getUiLanguage();
+      const isEnglish = lang === "en";
+
+      document.documentElement.lang = lang;
+      langNlLink.href = "./admin.html";
+      langEnLink.href = "./admin.html?lang=en";
+      langNlLink.classList.toggle("active", !isEnglish);
+      langEnLink.classList.toggle("active", isEnglish);
+      document.title = isEnglish ? "Repair Cafe - Admin" : "Repair Café - Beheer";
+      document.querySelector(".title").textContent = isEnglish ? "Repair Cafe - Admin" : "Repair Café - Beheer";
+      document.getElementById("subtitleText").textContent = isEnglish
+        ? "Update the repair list"
+        : "Werk de reparatielijst bij";
+      document.getElementById("addRepairLabel").textContent = isEnglish ? "Add repair item" : "Reparatie toevoegen";
+      document.getElementById("categoryLabel").textContent = isEnglish ? "Category" : "Categorie";
+      categoryInput.placeholder = isEnglish ? "e.g. Bike brakes, Lamps, Clothing..." : "bijv. Fietsremmen, Lampen, Kleding...";
+      document.getElementById("descriptionLabel").textContent = isEnglish
+        ? "What needs repair?"
+        : "Wat moet er gerepareerd worden?";
+      descriptionInput.placeholder = isEnglish
+        ? "e.g. Flat tire / Replace wiring / Button replacement..."
+        : "bijv. Lekke band / Bedrading vervangen / Knoop aanzetten...";
+      document.getElementById("addRepairBtn").textContent = isEnglish ? "Add (queued)" : "Toevoegen (wachtrij)";
+      clearDayBtn.textContent = isEnglish ? "Reset today" : "Vandaag resetten";
+      document.getElementById("storageNote").textContent = isEnglish
+        ? "Data is stored in localStorage first. If Supabase is configured, updates are mirrored in the background."
+        : "Gegevens worden eerst lokaal opgeslagen (localStorage). Als Supabase is ingesteld, worden updates op de achtergrond gespiegeld.";
+      document.getElementById("summaryLabel").textContent = isEnglish ? "Today summary" : "Overzicht vandaag";
+      document.getElementById("queuedLabel").textContent = isEnglish ? "Queued" : "Wachtrij";
+      document.getElementById("inProgressLabel").textContent = isEnglish ? "In progress" : "Bezig";
+      document.getElementById("doneLabel").textContent = isEnglish ? "Done" : "Klaar";
+      document.getElementById("repairsTodayLabel").textContent = isEnglish
+        ? "Repairs (today)"
+        : "Reparaties (vandaag)";
+
+      function showError(message) {
+        errorBox.style.display = "block";
+        errorBox.textContent = message;
+      }
+
+      function badgeClass(status) {
+        if (status === "queued") return "badge badgeQueued";
+        if (status === "in_progress") return "badge badgeProgress";
+        if (status === "done") return "badge badgeDone";
+        return "badge";
+      }
+
+      function toneClass(status) {
+        if (status === "queued") return "tone toneQueued";
+        if (status === "in_progress") return "tone toneProgress";
+        if (status === "done") return "tone toneDone";
+        return "tone";
+      }
+
+      async function reload() {
+        const repairDay = getEffectiveRepairDay();
+        dayChip.textContent = isEnglish ? `Today (${repairDay})` : `Vandaag (${repairDay})`;
+
+        const [summary, latest] = await Promise.all([
+          fetchRepairsSummaryToday(repairDay),
+          fetchLatestRepairsToday(repairDay, 100),
+        ]);
+
+        queuedCountEl.textContent = String(summary.queuedCount);
+        inProgressCountEl.textContent = String(summary.inProgressCount);
+        doneCountEl.textContent = String(summary.doneCount);
+
+        repairsListEl.innerHTML = "";
+        for (const r of latest) {
+          const row = document.createElement("div");
+          row.className = "item";
+
+          const left = document.createElement("div");
+          const title = document.createElement("div");
+          title.className = "itemTitle";
+          title.textContent = r.category || (isEnglish ? "General" : "Algemeen");
+
+          const desc = document.createElement("div");
+          desc.className = "itemDesc";
+          desc.textContent = r.description || "";
+
+          left.appendChild(title);
+          left.appendChild(desc);
+
+          const right = document.createElement("div");
+
+          const badge = document.createElement("div");
+          badge.className = badgeClass(r.status);
+          badge.innerHTML = `<span class="${toneClass(r.status)}"></span>${statusLabel(r.status, lang)}`;
+
+          const btnRow = document.createElement("div");
+          btnRow.className = "btnRow";
+
+          const queuedBtn = document.createElement("button");
+          queuedBtn.type = "button";
+          queuedBtn.textContent = isEnglish ? "Queued" : "Wachtrij";
+          queuedBtn.className = r.status === "queued" ? "primary" : "";
+          queuedBtn.onclick = async () => {
+            await setRepairStatus(r.id, "queued");
+            await reload();
+          };
+
+          const progressBtn = document.createElement("button");
+          progressBtn.type = "button";
+          progressBtn.textContent = isEnglish ? "In progress" : "Bezig";
+          progressBtn.className = r.status === "in_progress" ? "primary" : "";
+          progressBtn.onclick = async () => {
+            await setRepairStatus(r.id, "in_progress");
+            await reload();
+          };
+
+          const doneBtn = document.createElement("button");
+          doneBtn.type = "button";
+          doneBtn.textContent = isEnglish ? "Done" : "Klaar";
+          doneBtn.className = r.status === "done" ? "primary" : "";
+          doneBtn.onclick = async () => {
+            await setRepairStatus(r.id, "done");
+            await reload();
+          };
+
+          btnRow.appendChild(queuedBtn);
+          btnRow.appendChild(progressBtn);
+          btnRow.appendChild(doneBtn);
+
+          right.appendChild(badge);
+          right.appendChild(btnRow);
+
+          row.appendChild(left);
+          row.appendChild(right);
+          repairsListEl.appendChild(row);
+        }
+      }
+
+      addForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        errorBox.style.display = "none";
+
+        const repairDay = getEffectiveRepairDay();
+        const category = categoryInput.value;
+        const description = descriptionInput.value;
+
+        try {
+          await addRepairItemToday(repairDay, { category, description });
+          categoryInput.value = "";
+          descriptionInput.value = "";
+          await reload();
+        } catch (err) {
+          const details = err?.message || (isEnglish ? "Unknown error" : "Onbekende fout");
+          showError(isEnglish ? `Could not add repair item: ${details}` : `Kon reparatie niet toevoegen: ${details}`);
+          // eslint-disable-next-line no-console
+          console.error(err);
+        }
+      });
+
+      clearDayBtn.addEventListener("click", async () => {
+        // Local-only: clears the day override used for testing.
+        localStorage.removeItem("repair_cafe_day_override");
+        await reload();
+      });
+
+      async function main() {
+        try {
+          await reload();
+          setInterval(reload, 5000);
+        } catch (e) {
+          const details = e?.message || (isEnglish ? "Unknown error" : "Onbekende fout");
+          showError(
+            isEnglish ? `Could not load admin data: ${details}` : `Kon beheergegevens niet laden: ${details}`
+          );
+          // eslint-disable-next-line no-console
+          console.error(e);
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
+

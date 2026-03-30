@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Repair Café - Bezoekers</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="topbar">
+        <div class="brand">
+          <img class="logo" src="./assets/img/repaircafexneworig.png" alt="Repair Café Zuilen logo" />
+          <div>
+            <h1 class="title fontLead">Repair Café</h1>
+            <p class="subtitle" id="subtitleText">Welkom. Bedankt dat je kapotte spullen een tweede leven geeft.</p>
+          </div>
+        </div>
+        <div class="chip" id="dayChip">Vandaag</div>
+      </div>
+
+      <div class="grid2">
+        <div class="panel">
+          <div class="kpiLabel" id="visitorsLabel">Bezoekers vandaag</div>
+          <div class="kpiRow">
+            <div class="fontLead kpiValue" id="visitorCount">…</div>
+            <div class="muted" id="checkinHelp" style="max-width: 240px; text-align: right">
+              Automatisch ingecheckt: maximaal 1 keer per dag per apparaat.
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="kpiLabel" id="howItWorksLabel">Hoe werkt het?</div>
+          <div class="muted" id="howItWorksBody" style="font-size: 18px; line-height: 1.4">
+            Open deze pagina om een bezoek te tellen. Medewerkers gebruiken de beheerpagina om
+            reparaties toe te voegen; het tv-scherm ververst automatisch.
+          </div>
+          <div style="margin-top: 12px" class="btnRow">
+            <a href="./display.html" id="displayLink"><button type="button" id="displayBtn">Naar tv-scherm</button></a>
+            <a href="./admin.html" id="adminLink"><button type="button" id="adminBtn">Medewerkers / Beheer</button></a>
+          </div>
+        </div>
+      </div>
+
+      <div class="errorBox" id="errorBox" style="display: none"></div>
+    </div>
+
+    <script type="module">
+      import { fetchVisitorCountToday, getEffectiveRepairDay, getUiLanguage, upsertVisitOncePerDay } from "./lib.js";
+
+      const errorBox = document.getElementById("errorBox");
+      const visitorCountEl = document.getElementById("visitorCount");
+      const dayChip = document.getElementById("dayChip");
+      const lang = getUiLanguage();
+      const isEnglish = lang === "en";
+
+      function withLang(url) {
+        return isEnglish ? `${url}?lang=en` : url;
+      }
+
+      document.documentElement.lang = lang;
+      document.title = isEnglish ? "Repair Cafe - Visitors" : "Repair Café - Bezoekers";
+      document.getElementById("subtitleText").textContent = isEnglish
+        ? "Welcome. Thanks for bringing broken items back to life."
+        : "Welkom. Bedankt dat je kapotte spullen een tweede leven geeft.";
+      document.getElementById("visitorsLabel").textContent = isEnglish ? "Visitors today" : "Bezoekers vandaag";
+      document.getElementById("checkinHelp").textContent = isEnglish
+        ? "Checked in automatically: max once per day per device."
+        : "Automatisch ingecheckt: maximaal 1 keer per dag per apparaat.";
+      document.getElementById("howItWorksLabel").textContent = isEnglish ? "How it works" : "Hoe werkt het?";
+      document.getElementById("howItWorksBody").textContent = isEnglish
+        ? "Open this page to count a visit. Staff use the admin page to add repairs; the TV screen refreshes automatically."
+        : "Open deze pagina om een bezoek te tellen. Medewerkers gebruiken de beheerpagina om reparaties toe te voegen; het tv-scherm ververst automatisch.";
+      document.getElementById("displayBtn").textContent = isEnglish ? "Go to TV screen" : "Naar tv-scherm";
+      document.getElementById("adminBtn").textContent = isEnglish ? "Staff / Admin" : "Medewerkers / Beheer";
+      document.getElementById("displayLink").href = withLang("./display.html");
+      document.getElementById("adminLink").href = withLang("./admin.html");
+
+      function showError(message) {
+        errorBox.style.display = "block";
+        errorBox.textContent = message;
+      }
+
+      async function main() {
+        const params = new URLSearchParams(location.search);
+        const noVisit = params.get("novisit") === "1" || params.get("novisit") === "true";
+
+        const visitDay = getEffectiveRepairDay();
+        dayChip.textContent = isEnglish
+          ? `Today (${visitDay})${noVisit ? " • no-visit" : ""}`
+          : `Vandaag (${visitDay})${noVisit ? " • geen-bezoek" : ""}`;
+
+        try {
+          // Auto view mode: insert visit on page open (safely limited to once/day per device).
+          if (!noVisit) {
+            await upsertVisitOncePerDay(visitDay);
+          }
+          const count = await fetchVisitorCountToday(visitDay);
+          visitorCountEl.textContent = String(count);
+        } catch (e) {
+          showError(
+            isEnglish
+              ? "Could not load visitor count. Check `config.js` for Supabase URL/anon key and verify database tables exist."
+              : "Kon het aantal bezoekers niet laden. Controleer of `config.js` de juiste Supabase URL en anon key bevat, en of de databasetabellen bestaan."
+          );
+          // eslint-disable-next-line no-console
+          console.error(e);
+        }
+      }
+
+      main();
+    </script>
+  </body>
+</html>
+
