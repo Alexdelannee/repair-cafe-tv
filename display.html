@@ -15,7 +15,7 @@
   <body>
     <div class="wrap">
       <div class="topbar">
-        <div class="brand">
+        <div class="brand" style="cursor: pointer;" onclick="window.location.href='index.html'">
           <img class="logo" src="./assets/img/repaircafexneworig.png" alt="Repair Café Zuilen logo" />
           <div>
             <h1 class="title fontLead">Repair Café</h1>
@@ -166,8 +166,15 @@
 
       async function main() {
         try {
+          const repairChannel = new BroadcastChannel("repair_cafe_updates");
+          repairChannel.onmessage = (event) => {
+            if (event.data.type === "DATA_UPDATE") {
+              load();
+            }
+          };
+
           await load();
-          setInterval(load, 4500);
+          setInterval(load, 30000); // Increased interval as BroadcastChannel handles updates
         } catch (e) {
           showError(
             isEnglish

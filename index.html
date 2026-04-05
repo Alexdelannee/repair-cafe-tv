@@ -53,7 +53,13 @@
     </div>
 
     <script type="module">
-      import { fetchVisitorCountToday, getEffectiveRepairDay, getUiLanguage, upsertVisitOncePerDay } from "./lib.js";
+      import {
+        fetchVisitorCountToday,
+        getEffectiveRepairDay,
+        getUiLanguage,
+        setUiLanguage,
+        upsertVisitOncePerDay,
+      } from "./lib.js";
 
       const errorBox = document.getElementById("errorBox");
       const visitorCountEl = document.getElementById("visitorCount");
@@ -115,8 +121,28 @@
         }
       }
 
-      main();
-    </script>
+      function toggleLang() {
+        const newLang = isEnglish ? "nl" : "en";
+        setUiLanguage(newLang);
+        location.search = `?lang=${newLang}`;
+      }
+      
+      // Add a language toggle to the topbar
+      const topbarActions = document.createElement("div");
+      topbarActions.className = "topbarActions";
+      
+      const langBtn = document.createElement("button");
+      langBtn.className = "primary";
+      langBtn.style.padding = "5px 15px";
+      langBtn.textContent = isEnglish ? "🇳🇱 NL" : "🇬🇧 EN";
+      langBtn.onclick = () => {
+        const newLang = isEnglish ? "nl" : "en";
+        setUiLanguage(newLang);
+        window.location.search = `?lang=${newLang}`;
+      };
+      
+      topbarActions.appendChild(langBtn);
+      document.querySelector(".topbar").appendChild(topbarActions);
   </body>
 </html>
 

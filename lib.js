@@ -1,15 +1,8 @@
-import { REPAIRS_TABLE, SUPABASE_ANON_KEY, SUPABASE_URL, VISITS_TABLE } from "./config.js";
-import { supabase } from "./supabaseClient.js";
+import { REPAIRS_LOCAL_KEY, VISITS_LOCAL_KEY } from "./config.js";
 
 const DAY_STORAGE_KEY = "repair_cafe_day_override";
 const DEVICE_TOKEN_KEY = "repair_cafe_device_token";
-const VISITS_LOCAL_KEY = "repair_cafe_visits_v1";
-const REPAIRS_LOCAL_KEY = "repair_cafe_repairs_v1";
 const UI_LANG_KEY = "repair_cafe_ui_lang";
-
-function isSupabaseConfigured() {
-  return !SUPABASE_URL.includes("YOUR_PROJECT_ID") && !SUPABASE_ANON_KEY.includes("YOUR_SUPABASE_ANON_KEY");
-}
 
 function readJsonArray(key) {
   const raw = localStorage.getItem(key);
@@ -22,8 +15,15 @@ function readJsonArray(key) {
   }
 }
 
+const repairChannel = new BroadcastChannel("repair_cafe_updates");
+
+function notifyUpdate(key, data) {
+  repairChannel.postMessage({ type: "DATA_UPDATE", key, data });
+}
+
 function writeJsonArray(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+  notifyUpdate(key, value);
 }
 
 function nowIso() {
@@ -33,6 +33,10 @@ function nowIso() {
 function safeUuid() {
   if (crypto?.randomUUID) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function setUiLanguage(lang) {
+  localStorage.setItem(UI_LANG_KEY, lang);
 }
 
 export function getUiLanguage() {
@@ -67,17 +71,6 @@ export function getDeviceToken() {
   return token;
 }
 
-async function fetchExactCount(tableName, columnName, value, extraEq = {}) {
-  const { count, error } = await supabase
-    .from(tableName)
-    .select("id", { count: "exact", head: true })
-    .eq(columnName, value)
-    .match(extraEq);
-
-  if (error) throw error;
-  return count ?? 0;
-}
-
 export async function upsertVisitOncePerDay(visitDay) {
   const deviceToken = getDeviceToken();
   const visits = readJsonArray(VISITS_LOCAL_KEY);
@@ -90,24 +83,6 @@ export async function upsertVisitOncePerDay(visitDay) {
       created_at: nowIso(),
     });
     writeJsonArray(VISITS_LOCAL_KEY, visits);
-  }
-
-  if (!isSupabaseConfigured()) return;
-  try {
-    // Local-first mode: write locally first, then best-effort mirror to Supabase.
-    const { error } = await supabase
-      .from(VISITS_TABLE)
-      .upsert(
-        {
-          visit_day: visitDay,
-          device_token: deviceToken,
-        },
-        { onConflict: "visit_day,device_token" }
-      );
-    if (error) throw error;
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("Supabase visit mirror failed; continuing with localStorage data.", e);
   }
 }
 
@@ -146,20 +121,6 @@ export async function addRepairItemToday(repairDay, { category, description }) {
   const repairs = readJsonArray(REPAIRS_LOCAL_KEY);
   repairs.push(row);
   writeJsonArray(REPAIRS_LOCAL_KEY, repairs);
-
-  if (!isSupabaseConfigured()) return;
-  try {
-    const { error } = await supabase.from(REPAIRS_TABLE).insert({
-      repair_day: row.repair_day,
-      category: row.category,
-      description: row.description,
-      status: row.status,
-    });
-    if (error) throw error;
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("Supabase repair insert mirror failed; continuing with localStorage data.", e);
-  }
 }
 
 export async function setRepairStatus(repairId, newStatus) {
@@ -168,15 +129,6 @@ export async function setRepairStatus(repairId, newStatus) {
   if (idx >= 0) {
     repairs[idx] = { ...repairs[idx], status: newStatus, updated_at: nowIso() };
     writeJsonArray(REPAIRS_LOCAL_KEY, repairs);
-  }
-
-  if (!isSupabaseConfigured()) return;
-  try {
-    const { error } = await supabase.from(REPAIRS_TABLE).update({ status: newStatus }).eq("id", repairId);
-    if (error) throw error;
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("Supabase repair update mirror failed; continuing with localStorage data.", e);
   }
 }
 
@@ -195,7 +147,6 @@ export function statusTone(status) {
 }
 
 export function getEffectiveRepairDay() {
-  // Handy for testing: you can override the day from devtools without touching code.
   const override = localStorage.getItem(DAY_STORAGE_KEY);
   return override || getLocalISODate();
 }
