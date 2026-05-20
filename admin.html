@@ -84,6 +84,62 @@
         <div class="kpiLabel" id="repairsTodayLabel">Reparaties (vandaag)</div>
         <div class="list" id="repairsList"></div>
       </div>
+
+      <div class="panel">
+        <div class="kpiLabel" id="slideshowPanelLabel">Slideshow (TV-scherm)</div>
+
+        <div style="display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:16px">
+          <label style="display:flex; align-items:center; gap:8px; margin:0; cursor:pointer">
+            <input type="checkbox" id="slideshowEnabled" style="width:auto; cursor:pointer" />
+            <span id="slideshowEnabledLabel">Ingeschakeld</span>
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; margin:0">
+            <span id="slideshowDurationLabel" class="muted" style="font-size:14px">Standaardduur (ms):</span>
+            <input type="number" id="slideshowDuration" style="width:90px" min="1000" step="1000" value="10000" />
+          </label>
+        </div>
+
+        <div id="slideList" style="margin-bottom:16px; display:flex; flex-direction:column; gap:8px"></div>
+
+        <div style="border:1px solid rgba(59,49,113,0.12); border-radius:14px; padding:14px">
+          <div class="kpiLabel" id="addSlideLabel" style="margin-bottom:10px">Slide toevoegen</div>
+          <div class="formGrid">
+            <div>
+              <label id="slideTypeLabel" for="newSlideType">Type</label>
+              <select id="newSlideType">
+                <option value="dashboard">Dashboard</option>
+                <option value="image-upload">Afbeelding</option>
+                <option value="webpage">Webpagina</option>
+              </select>
+            </div>
+            <div>
+              <label id="slideDurLabel" for="newSlideDuration">Duur (ms, leeg = standaard)</label>
+              <input type="number" id="newSlideDuration" min="1000" step="1000" placeholder="10000" />
+            </div>
+          </div>
+          <div id="urlField" style="margin-top:10px; display:none">
+            <label id="slideUrlLabel" for="newSlideUrl">URL</label>
+            <input type="text" id="newSlideUrl" placeholder="https://..." />
+          </div>
+          <div id="uploadField" style="margin-top:10px; display:none">
+            <input type="file" id="newSlideFile" accept="image/*" style="display:none" />
+            <div id="dropZone" class="dropZone">
+              <div id="dropZonePrompt" class="dropZonePrompt">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <span id="dropZoneText">Sleep afbeelding hierheen of klik om te bladeren</span>
+              </div>
+              <img id="imagePreview" src="" alt="" class="imagePreview" style="display:none" />
+            </div>
+          </div>
+          <div class="btnRow" style="margin-top:12px">
+            <button type="button" class="primary" id="addSlideBtn">Slide toevoegen</button>
+          </div>
+          <div class="muted" id="exampleHint" style="margin-top:12px; font-size:13px; line-height:1.5;">
+            Voorbeeld lokale slide: <code style="background:rgba(59,49,113,0.08); padding:2px 6px; border-radius:6px; font-size:12px;">./slide-example.html</code>
+            — <a id="addExampleLink" href="#" style="color:var(--rcOrange); font-weight:700;">direct toevoegen</a>
+          </div>
+        </div>
+      </div>
     </div>
 
     <script type="module">
@@ -96,6 +152,8 @@
         setRepairStatus,
         statusLabel,
         statusTone,
+        getSlideshowConfig,
+        setSlideshowConfig,
       } from "./lib.js";
 
       const errorBox = document.getElementById("errorBox");
@@ -285,6 +343,261 @@
           console.error(e);
         }
       }
+
+      // ── Slideshow management ──────────────────────────────────────────────────
+
+      document.getElementById("slideshowPanelLabel").textContent = isEnglish ? "Slideshow (TV screen)" : "Slideshow (TV-scherm)";
+      document.getElementById("slideshowEnabledLabel").textContent = isEnglish ? "Enabled" : "Ingeschakeld";
+      document.getElementById("slideshowDurationLabel").textContent = isEnglish ? "Default duration (ms):" : "Standaardduur (ms):";
+      document.getElementById("addSlideLabel").textContent = isEnglish ? "Add slide" : "Slide toevoegen";
+      document.getElementById("slideTypeLabel").textContent = isEnglish ? "Type" : "Type";
+      document.getElementById("slideDurLabel").textContent = isEnglish ? "Duration (ms, empty = default)" : "Duur (ms, leeg = standaard)";
+      document.getElementById("slideUrlLabel").textContent = isEnglish ? "URL" : "URL";
+      document.getElementById("addSlideBtn").textContent = isEnglish ? "Add slide" : "Slide toevoegen";
+
+      const newSlideTypeEl = document.getElementById("newSlideType");
+      if (isEnglish) {
+        newSlideTypeEl.options[1].textContent = "Image";
+        newSlideTypeEl.options[2].textContent = "Web page";
+      }
+      document.getElementById("dropZoneText").textContent = isEnglish
+        ? "Drag image here or click to browse"
+        : "Sleep afbeelding hierheen of klik om te bladeren";
+
+      const slideshowEnabledEl = document.getElementById("slideshowEnabled");
+      const slideshowDurationEl = document.getElementById("slideshowDuration");
+      const slideListEl = document.getElementById("slideList");
+      const newSlideDurationEl = document.getElementById("newSlideDuration");
+      const newSlideUrlEl = document.getElementById("newSlideUrl");
+      const newSlideFileEl = document.getElementById("newSlideFile");
+      const urlFieldEl = document.getElementById("urlField");
+      const uploadFieldEl = document.getElementById("uploadField");
+      const dropZoneEl = document.getElementById("dropZone");
+      const imagePreviewEl = document.getElementById("imagePreview");
+
+      let pendingImageDataUrl = null;
+      let pendingImageName = null;
+
+      function setImagePreview(dataUrl, name) {
+        pendingImageDataUrl = dataUrl;
+        pendingImageName = name;
+        imagePreviewEl.src = dataUrl;
+        imagePreviewEl.style.display = "block";
+        document.getElementById("dropZonePrompt").style.display = "none";
+        dropZoneEl.classList.add("dropZoneHasImage");
+      }
+
+      function clearImagePreview() {
+        pendingImageDataUrl = null;
+        pendingImageName = null;
+        imagePreviewEl.src = "";
+        imagePreviewEl.style.display = "none";
+        document.getElementById("dropZonePrompt").style.display = "flex";
+        dropZoneEl.classList.remove("dropZoneHasImage");
+      }
+
+      function readImageFile(file) {
+        if (!file || !file.type.startsWith("image/")) return;
+        const reader = new FileReader();
+        reader.onload = (e) => setImagePreview(e.target.result, file.name);
+        reader.readAsDataURL(file);
+      }
+
+      dropZoneEl.addEventListener("click", () => newSlideFileEl.click());
+
+      newSlideFileEl.addEventListener("change", () => {
+        if (newSlideFileEl.files[0]) readImageFile(newSlideFileEl.files[0]);
+      });
+
+      dropZoneEl.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZoneEl.classList.add("dropZoneActive");
+      });
+
+      dropZoneEl.addEventListener("dragleave", () => {
+        dropZoneEl.classList.remove("dropZoneActive");
+      });
+
+      dropZoneEl.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZoneEl.classList.remove("dropZoneActive");
+        const file = e.dataTransfer.files[0];
+        if (file) readImageFile(file);
+      });
+
+      function slideTypeLabel(type) {
+        if (type === "dashboard") return "Dashboard";
+        if (type === "image") return isEnglish ? "Image" : "Afbeelding";
+        if (type === "webpage") return isEnglish ? "Web page" : "Webpagina";
+        return type;
+      }
+
+      function renderSlideList() {
+        const cfg = getSlideshowConfig();
+        slideshowEnabledEl.checked = cfg.enabled;
+        slideshowDurationEl.value = cfg.defaultDuration;
+        slideListEl.innerHTML = "";
+
+        if (cfg.slides.length === 0) {
+          slideListEl.innerHTML = `<div class="muted" style="font-size:14px">${isEnglish ? "No slides configured." : "Geen slides geconfigureerd."}</div>`;
+          return;
+        }
+
+        cfg.slides.forEach((slide, idx) => {
+          const row = document.createElement("div");
+          row.className = "item";
+
+          const left = document.createElement("div");
+          left.style.cssText = "display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-width:0;";
+
+          const typeBadge = document.createElement("span");
+          typeBadge.className = "badge";
+          typeBadge.style.cssText = "font-size:12px; padding:4px 8px; white-space:nowrap;";
+          typeBadge.textContent = slideTypeLabel(slide.type);
+          left.appendChild(typeBadge);
+
+          if (slide.url) {
+            const urlSpan = document.createElement("span");
+            urlSpan.className = "muted";
+            urlSpan.style.cssText = "font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:260px;";
+            urlSpan.textContent = slide.url.startsWith("data:")
+              ? (slide.name || (isEnglish ? "uploaded image" : "geüploade afbeelding"))
+              : slide.url;
+            left.appendChild(urlSpan);
+          }
+
+          if (slide.duration) {
+            const durSpan = document.createElement("span");
+            durSpan.className = "muted";
+            durSpan.style.cssText = "font-size:12px; white-space:nowrap;";
+            durSpan.textContent = `${slide.duration / 1000}s`;
+            left.appendChild(durSpan);
+          }
+
+          const right = document.createElement("div");
+          right.className = "btnRow";
+          right.style.cssText = "flex-wrap:nowrap; gap:6px;";
+
+          if (idx > 0) {
+            const upBtn = document.createElement("button");
+            upBtn.type = "button";
+            upBtn.textContent = "↑";
+            upBtn.title = isEnglish ? "Move up" : "Omhoog";
+            upBtn.onclick = () => {
+              const c = getSlideshowConfig();
+              [c.slides[idx - 1], c.slides[idx]] = [c.slides[idx], c.slides[idx - 1]];
+              setSlideshowConfig(c);
+              renderSlideList();
+            };
+            right.appendChild(upBtn);
+          }
+
+          if (idx < cfg.slides.length - 1) {
+            const downBtn = document.createElement("button");
+            downBtn.type = "button";
+            downBtn.textContent = "↓";
+            downBtn.title = isEnglish ? "Move down" : "Omlaag";
+            downBtn.onclick = () => {
+              const c = getSlideshowConfig();
+              [c.slides[idx], c.slides[idx + 1]] = [c.slides[idx + 1], c.slides[idx]];
+              setSlideshowConfig(c);
+              renderSlideList();
+            };
+            right.appendChild(downBtn);
+          }
+
+          const delBtn = document.createElement("button");
+          delBtn.type = "button";
+          delBtn.textContent = "✕";
+          delBtn.title = isEnglish ? "Delete" : "Verwijderen";
+          delBtn.onclick = () => {
+            const c = getSlideshowConfig();
+            c.slides.splice(idx, 1);
+            setSlideshowConfig(c);
+            renderSlideList();
+          };
+          right.appendChild(delBtn);
+
+          row.appendChild(left);
+          row.appendChild(right);
+          slideListEl.appendChild(row);
+        });
+      }
+
+      slideshowEnabledEl.addEventListener("change", () => {
+        const c = getSlideshowConfig();
+        c.enabled = slideshowEnabledEl.checked;
+        setSlideshowConfig(c);
+      });
+
+      slideshowDurationEl.addEventListener("change", () => {
+        const c = getSlideshowConfig();
+        c.defaultDuration = parseInt(slideshowDurationEl.value) || 10000;
+        setSlideshowConfig(c);
+      });
+
+      newSlideTypeEl.addEventListener("change", () => {
+        const type = newSlideTypeEl.value;
+        urlFieldEl.style.display = type === "webpage" ? "block" : "none";
+        uploadFieldEl.style.display = type === "image-upload" ? "block" : "none";
+        if (type !== "image-upload") clearImagePreview();
+      });
+
+      if (isEnglish) {
+        document.getElementById("exampleHint").innerHTML =
+          `Example local slide: <code style="background:rgba(59,49,113,0.08); padding:2px 6px; border-radius:6px; font-size:12px;">./slide-example.html</code> — <a id="addExampleLink" href="#" style="color:var(--rcOrange); font-weight:700;">add directly</a>`;
+      }
+
+      document.getElementById("addExampleLink").addEventListener("click", (e) => {
+        e.preventDefault();
+        const c = getSlideshowConfig();
+        const already = c.slides.some(s => s.url === "./slide-example.html");
+        if (!already) {
+          c.slides.push({ id: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`, type: "webpage", url: "./slide-example.html" });
+          setSlideshowConfig(c);
+          renderSlideList();
+        }
+      });
+
+      document.getElementById("addSlideBtn").addEventListener("click", () => {
+        const type = newSlideTypeEl.value;
+        const duration = parseInt(newSlideDurationEl.value) || null;
+        const id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}`;
+
+        if (type === "dashboard") {
+          const c = getSlideshowConfig();
+          c.slides.push({ id, type: "dashboard", ...(duration ? { duration } : {}) });
+          setSlideshowConfig(c);
+          renderSlideList();
+          newSlideDurationEl.value = "";
+          return;
+        }
+
+        if (type === "webpage") {
+          const url = newSlideUrlEl.value.trim();
+          if (!url) { alert(isEnglish ? "Enter a URL." : "Voer een URL in."); return; }
+          const c = getSlideshowConfig();
+          c.slides.push({ id, type: "webpage", url, ...(duration ? { duration } : {}) });
+          setSlideshowConfig(c);
+          renderSlideList();
+          newSlideUrlEl.value = "";
+          newSlideDurationEl.value = "";
+          return;
+        }
+
+        if (type === "image-upload") {
+          if (!pendingImageDataUrl) { alert(isEnglish ? "Select or drop an image first." : "Selecteer of sleep eerst een afbeelding."); return; }
+          const c = getSlideshowConfig();
+          c.slides.push({ id, type: "image", url: pendingImageDataUrl, name: pendingImageName || "image", ...(duration ? { duration } : {}) });
+          setSlideshowConfig(c);
+          renderSlideList();
+          clearImagePreview();
+          newSlideFileEl.value = "";
+          newSlideDurationEl.value = "";
+        }
+      });
+
+      renderSlideList();
 
       main();
     </script>

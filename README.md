@@ -1,40 +1,73 @@
 # Repair Café TV Page (Visitors + Repairs)
 
-This is a local-only, static website (GitHub Pages compatible) featuring:
-1. A visitor page that auto-increments a **visits counter** once per day per device.
-2. A TV display page with **big-font counters** and the latest repairs.
-3. A staff/admin page to **add repairs** and mark them `queued`, `in_progress`, or `done`.
+Static website (GitHub Pages compatible) with three pages:
 
-Data is stored locally in the browser (`localStorage`) and synchronized in real-time across all open tabs/windows on the same computer using the `BroadcastChannel` API.
+1. **`index.html`** — visitor counter (once per day per device)
+2. **`display.html`** — TV screen with big counters and latest repairs
+3. **`admin.html`** — staff adds repairs and sets status (`queued`, `in_progress`, `done`)
 
-## 1) Deployment
+Data stored in browser `localStorage`, synced in real-time across tabs on the same machine via `BroadcastChannel`.
 
-1. Create a new GitHub repository (example: `repair-cafe-tv`)
-2. Upload/push the files from this folder:
-   - `index.html`
-   - `display.html`
-   - `admin.html`
-   - `styles.css`
-   - `config.js`
-   - `lib.js`
-3. GitHub: **Settings -> Pages**
-4. Set **Source** to `Deploy from a branch`
-5. Choose the branch and folder/root: `/ (root)`
+---
 
-You should end up with a URL like:
-`https://YOUR_GITHUB_USER.github.io/repair-cafe-tv/`
+## Running locally
 
-## 2) How to use it during the event
+> **Do not open files directly** (`file://`) — Chrome blocks ES module imports. Serve via HTTP instead.
 
-- Visitors open: `index.html` (on phones/tablets)
-- Staff open: `admin.html`
-- TV/Chromecast (mirroring) should show: `display.html`  
+```bash
+npx serve .
+```
 
-### Real-time Synchronization
-Since this is a local-only setup, ensure all your devices (Admin PC and TV PC) are connected and running in the same browser environment or session if you want them to sync, or simply keep the Admin panel and Display open in different tabs on the machine connected to the TV.
+Then open: `http://localhost:3000/display.html`
 
-### Chromecast tip
+---
 
-- **Cast `display.html`** so the TV never affects visitor counting.
-- If you must cast the visitor page, use `index.html?novisit=1` so it **does not** increment the visitor counter.
+## Deployment (GitHub Pages)
 
+1. Push files to a GitHub repository
+2. Go to **Settings → Pages**
+3. Set source to `Deploy from branch`, branch `master`, folder `/root`
+
+URL will be: `https://YOUR_GITHUB_USER.github.io/repair-cafe-tv/`
+
+---
+
+## Usage during events
+
+| Page | Who | URL |
+|------|-----|-----|
+| `index.html` | Visitors (phone/tablet) | `/index.html` |
+| `admin.html` | Staff | `/admin.html` |
+| `display.html` | TV / Chromecast | `/display.html` |
+
+**Chromecast tip:** cast `display.html` so the TV never affects visitor counting.
+To visit without incrementing counter: `index.html?novisit=1`
+
+---
+
+## Slideshow (TV display)
+
+Configure in `config.js`:
+
+```js
+export const SLIDESHOW_ENABLED = true;
+export const SLIDESHOW_DEFAULT_DURATION = 10000; // ms
+
+export const SLIDESHOW_SLIDES = [
+  { type: "dashboard" },                                          // stats screen
+  { type: "image", url: "./assets/img/yourimage.jpg", duration: 8000 },
+  { type: "webpage", url: "https://yoursite.com", duration: 15000 },
+];
+```
+
+Slide types:
+- `dashboard` — shows live stats and repairs list
+- `image` — full-screen image
+- `webpage` — full-screen iframe (note: sites with `X-Frame-Options` will refuse to load)
+
+---
+
+## Data persistence
+
+`localStorage` is **per origin** — data added on GitHub Pages is separate from `localhost`.
+Admin and display must run in the same browser/origin to share data.

@@ -1,4 +1,4 @@
-import { REPAIRS_LOCAL_KEY, VISITS_LOCAL_KEY } from "./config.js";
+import { REPAIRS_LOCAL_KEY, VISITS_LOCAL_KEY, SLIDESHOW_STORAGE_KEY, SLIDESHOW_ENABLED, SLIDESHOW_DEFAULT_DURATION, SLIDESHOW_SLIDES } from "./config.js";
 
 const DAY_STORAGE_KEY = "repair_cafe_day_override";
 const DEVICE_TOKEN_KEY = "repair_cafe_device_token";
@@ -149,5 +149,25 @@ export function statusTone(status) {
 export function getEffectiveRepairDay() {
   const override = localStorage.getItem(DAY_STORAGE_KEY);
   return override || getLocalISODate();
+}
+
+export function getSlideshowConfig() {
+  const raw = localStorage.getItem(SLIDESHOW_STORAGE_KEY);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.slides)) return parsed;
+    } catch {}
+  }
+  return {
+    enabled: SLIDESHOW_ENABLED,
+    defaultDuration: SLIDESHOW_DEFAULT_DURATION,
+    slides: SLIDESHOW_SLIDES.map((s, i) => ({ id: `cfg-${i}`, ...s })),
+  };
+}
+
+export function setSlideshowConfig(config) {
+  localStorage.setItem(SLIDESHOW_STORAGE_KEY, JSON.stringify(config));
+  notifyUpdate(SLIDESHOW_STORAGE_KEY, config);
 }
 

@@ -60,6 +60,11 @@
 
     <div class="tvFullscreenHint" id="tvHint">Tip: cast een browsertab met deze URL. Gebruik eventueel volledig scherm.</div>
 
+    <div id="slideshowOverlay">
+      <img id="slideImg" src="" alt="" />
+      <iframe id="slideFrame" src="" title="Slideshow" allow="autoplay"></iframe>
+    </div>
+
     <script type="module">
       import {
         fetchVisitorCountToday,
@@ -68,7 +73,9 @@
         getEffectiveRepairDay,
         getUiLanguage,
         statusLabel,
+        getSlideshowConfig,
       } from "./lib.js";
+      import { SLIDESHOW_STORAGE_KEY } from "./config.js";
 
       const errorBox = document.getElementById("errorBox");
       const visitorCountEl = document.getElementById("visitorCount");
@@ -169,7 +176,11 @@
           const repairChannel = new BroadcastChannel("repair_cafe_updates");
           repairChannel.onmessage = (event) => {
             if (event.data.type === "DATA_UPDATE") {
-              load();
+              if (event.data.key === SLIDESHOW_STORAGE_KEY) {
+                location.reload();
+              } else {
+                load();
+              }
             }
           };
 
@@ -187,6 +198,48 @@
       }
 
       main();
+
+      const slideshowCfg = getSlideshowConfig();
+      if (slideshowCfg.enabled && slideshowCfg.slides.length > 1) {
+        const overlay = document.getElementById("slideshowOverlay");
+        const slideImg = document.getElementById("slideImg");
+        const slideFrame = document.getElementById("slideFrame");
+        const wrap = document.querySelector(".wrap");
+
+        function showSlide(index) {
+          const slide = slideshowCfg.slides[index % slideshowCfg.slides.length];
+          const duration = slide.duration ?? slideshowCfg.defaultDuration;
+
+          if (slide.type === "dashboard") {
+            overlay.classList.remove("active");
+            slideImg.style.display = "none";
+            slideFrame.style.display = "none";
+            slideFrame.src = "";
+            wrap.style.visibility = "visible";
+            wrap.style.opacity = "1";
+            load();
+          } else {
+            wrap.style.visibility = "hidden";
+            wrap.style.opacity = "0";
+            overlay.classList.add("active");
+
+            if (slide.type === "image") {
+              slideFrame.style.display = "none";
+              slideFrame.src = "";
+              slideImg.src = slide.url;
+              slideImg.style.display = "block";
+            } else {
+              slideImg.style.display = "none";
+              slideFrame.src = slide.url;
+              slideFrame.style.display = "block";
+            }
+          }
+
+          timer = setTimeout(() => showSlide(index + 1), duration);
+        }
+
+        showSlide(0);
+      }
     </script>
   </body>
 </html>
