@@ -14,6 +14,6 @@ export const SLIDESHOW_DEFAULT_DURATION = 10000;
 
 export const SLIDESHOW_SLIDES = [
   { type: "dashboard" },
-  { type: "image", url: "./assets/img/yourimage.jpg", duration: 8000 },
+  { type: "image", url: "./assets/img/repaircafexneworig.png", duration: 8000 },
   { type: "webpage", url: "https://repaircafezuilen.nl", duration: 15000 },
 ];

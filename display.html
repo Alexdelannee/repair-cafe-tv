@@ -27,12 +27,15 @@
 
       <div class="grid3">
         <div class="panel">
-          <div class="kpiLabel" id="visitorsLabel">Bezoekers vandaag</div>
-          <div class="fontLead kpiValue" id="visitorCount">…</div>
-        </div>
-        <div class="panel">
           <div class="kpiLabel" id="queuedLabel">Wachtrij</div>
           <div class="fontLead kpiValue" id="queuedCount">…</div>
+        </div>
+        <div class="panel">
+          <div class="kpiLabel" id="inProgressLabel">Bezig</div>
+          <div class="fontLead kpiValue" id="inProgressCount">…</div>
+          <div class="muted" id="autoRefreshText" style="margin-top: 10px">
+            Wordt automatisch elke paar seconden bijgewerkt.
+          </div>
         </div>
         <div class="panel">
           <div class="kpiLabel" id="doneLabel">Klaar</div>
@@ -42,11 +45,8 @@
 
       <div class="grid2">
         <div class="panel">
-          <div class="kpiLabel" id="inProgressLabel">Bezig</div>
-          <div class="fontLead kpiValue" id="inProgressCount">…</div>
-          <div class="muted" id="autoRefreshText" style="margin-top: 10px">
-            Wordt automatisch elke paar seconden bijgewerkt.
-          </div>
+          <div class="kpiLabel" id="visitorsLabel">Bezoekers vandaag</div>
+          <div class="fontLead kpiValue" id="visitorCount">…</div>
         </div>
 
         <div class="panel">
@@ -63,6 +63,7 @@
     <div id="slideshowOverlay">
       <img id="slideImg" src="" alt="" />
       <iframe id="slideFrame" src="" title="Slideshow" allow="autoplay"></iframe>
+      <div id="slideHtml" style="display:none; width:100%; height:100%; overflow:auto; background:#fff; color:#000;"></div>
     </div>
 
     <script type="module">
@@ -204,9 +205,15 @@
         const overlay = document.getElementById("slideshowOverlay");
         const slideImg = document.getElementById("slideImg");
         const slideFrame = document.getElementById("slideFrame");
+        const slideHtml = document.getElementById("slideHtml");
         const wrap = document.querySelector(".wrap");
+        let timer = 0;
 
-        function showSlide(index) {
+        async function showSlide(index) {
+          if (timer) {
+            clearTimeout(timer);
+          }
+
           const slide = slideshowCfg.slides[index % slideshowCfg.slides.length];
           const duration = slide.duration ?? slideshowCfg.defaultDuration;
 
@@ -226,15 +233,59 @@
             if (slide.type === "image") {
               slideFrame.style.display = "none";
               slideFrame.src = "";
+              slideHtml.style.display = "none";
               slideImg.src = slide.url;
               slideImg.style.display = "block";
+            } else if (slide.type === "webpage") {
+              slideImg.style.display = "none";
+              slideFrame.style.display = "none";
+              slideFrame.src = "";
+              slideHtml.style.display = "block";
+
+              const parsedUrl = new URL(slide.url, location.href);
+              const isSameOrigin = parsedUrl.origin === location.origin;
+              if (!isSameOrigin) {
+                slideHtml.innerHTML = `
+                  <div style="padding: 24px; color: #111; font-size: 18px; line-height: 1.5;">
+                    This page cannot be embedded directly because it is on a different origin.
+                    <br />
+                    <a href="${slide.url}" target="_blank" rel="noopener" style="color: #0066cc;">Open the page in a new tab</a>
+                  </div>`;
+              } else {
+                slideHtml.innerHTML = "Loading...";
+
+                try {
+                  const resp = await fetch(slide.url, { credentials: 'include' });
+                  if (!resp.ok) throw new Error('Fetch failed');
+                  const contentType = resp.headers.get('content-type') || '';
+                  if (contentType.includes('text/html')) {
+                    const text = await resp.text();
+                    // Injecting HTML may break styling/scripts; this is intended for same-origin pages only
+                    slideHtml.innerHTML = text;
+                  } else {
+                    slideHtml.innerHTML = `
+                      <div style="padding: 24px; color: #111; font-size: 18px; line-height: 1.5;">
+                        This page cannot be embedded directly.
+                        <br />
+                        <a href="${slide.url}" target="_blank" rel="noopener" style="color: #0066cc;">Open the page in a new tab</a>
+                      </div>`;
+                  }
+                } catch (e) {
+                  slideHtml.innerHTML = `
+                    <div style="padding: 24px; color: #111; font-size: 18px; line-height: 1.5;">
+                      Could not embed this page directly.
+                      <br />
+                      <a href="${slide.url}" target="_blank" rel="noopener" style="color: #0066cc;">Open the page in a new tab</a>
+                    </div>`;
+                }
+              }
             } else {
+              slideHtml.style.display = "none";
               slideImg.style.display = "none";
               slideFrame.src = slide.url;
               slideFrame.style.display = "block";
             }
           }
-
           timer = setTimeout(() => showSlide(index + 1), duration);
         }
 
